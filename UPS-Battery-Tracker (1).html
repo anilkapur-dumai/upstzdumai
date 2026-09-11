@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPS Battery Tracker</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;color:#1f2937}
+.container{max-width:1200px;margin:0 auto;padding:24px}.header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:22px}
+h1{margin:0;font-size:28px}.subtitle{color:#6b7280;margin-top:5px}
+button{border:0;border-radius:8px;padding:10px 14px;cursor:pointer;font-weight:600}
+.btn-primary{background:#2563eb;color:white}.btn-secondary{background:#e5e7eb;color:#111827}.btn-danger{background:#fee2e2;color:#b91c1c}.btn-edit{background:#dbeafe;color:#1d4ed8}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}.card{background:white;border-radius:12px;padding:18px;box-shadow:0 2px 8px #0000000b}.card .num{font-size:28px;font-weight:700}.card .label{color:#6b7280;font-size:13px;margin-top:4px}
+.toolbar{background:white;border-radius:12px;padding:14px;display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;box-shadow:0 2px 8px #0000000b}
+input,select,textarea{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}textarea{min-height:80px;resize:vertical}
+.search{flex:1;min-width:220px}.table-wrap{background:white;border-radius:12px;overflow:auto;box-shadow:0 2px 8px #0000000b}
+table{width:100%;border-collapse:collapse;min-width:850px}th,td{padding:13px 12px;text-align:left;border-bottom:1px solid #eef0f2;font-size:14px}th{background:#f9fafb;font-size:12px;text-transform:uppercase;color:#6b7280}tr:hover td{background:#fafafa}
+.badge{display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700}.green{background:#dcfce7;color:#166534}.yellow{background:#fef3c7;color:#92400e}.red{background:#fee2e2;color:#991b1b}
+.actions{display:flex;gap:6px}.empty{text-align:center;padding:40px;color:#6b7280}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:20px}.modal.show{display:flex}.modal-box{background:white;width:min(560px,100%);border-radius:14px;padding:22px;max-height:90vh;overflow:auto}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h2{margin:0}.close{background:none;font-size:24px;padding:2px 8px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.full{grid-column:1/-1}.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.note{font-size:12px;color:#6b7280;margin-top:12px}
+@media(max-width:800px){.cards{grid-template-columns:repeat(2,1fr)}.header{align-items:flex-start;flex-direction:column}.form-grid{grid-template-columns:1fr}.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>🔋 UPS Battery Tracker</h1>
+      <div class="subtitle">Pencatatan pergantian baterai UPS — tersimpan otomatis di browser</div>
+    </div>
+    <button class="btn-primary" onclick="openModal()">＋ Tambah Data</button>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="num" id="total">0</div><div class="label">Total UPS</div></div>
+    <div class="card"><div class="num" id="normal">0</div><div class="label">Baterai Normal</div></div>
+    <div class="card"><div class="num" id="attention">0</div><div class="label">Perlu Perhatian</div></div>
+    <div class="card"><div class="num" id="replace">0</div><div class="label">Segera Ganti</div></div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search" id="search" placeholder="🔍 Cari nama UPS, lokasi, teknisi..." oninput="render()">
+    <select id="filter" onchange="render()">
+      <option value="all">Semua Status</option>
+      <option value="normal">Normal</option>
+      <option value="attention">Perlu Perhatian</option>
+      <option value="replace">Segera Ganti</option>
+    </select>
+    <button class="btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="btn-secondary" onclick="exportJSON()">⬇ Backup JSON</button>
+    <button class="btn-secondary" onclick="document.getElementById('importFile').click()">⬆ Import JSON</button>
+    <input id="importFile" type="file" accept=".json" style="display:none" onchange="importJSON(event)">
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>No</th><th>Nama UPS</th><th>Lokasi</th><th>Tanggal Ganti</th><th>Umur</th><th>Teknisi</th><th>Status</th><th>Aksi</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="note">💾 Data otomatis disimpan di browser ini. Gunakan Backup JSON secara berkala agar data aman.</div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="modal-head"><h2 id="modalTitle">Tambah Data UPS</h2><button class="close" onclick="closeModal()">×</button></div>
+    <form id="form" onsubmit="saveData(event)">
+      <input type="hidden" id="editId">
+      <div class="form-grid">
+        <div><label>Nama UPS *</label><input id="name" required placeholder="Contoh: UPS APC 1"></div>
+        <div><label>Lokasi *</label><input id="location" required placeholder="Contoh: Server Room"></div>
+        <div><label>Tanggal Ganti Baterai *</label><input id="date" type="date" required></div>
+        <div><label>Teknisi</label><input id="technician" placeholder="Nama teknisi"></div>
+        <div class="full"><label>Catatan</label><textarea id="notes" placeholder="Contoh: Ganti 2 pcs baterai 12V 9Ah"></textarea></div>
+      </div>
+      <div class="form-actions"><button type="button" class="btn-secondary" onclick="closeModal()">Batal</button><button class="btn-primary" type="submit">💾 Simpan</button></div>
+    </form>
+  </div>
+</div>
+
+<script>
+const KEY='upsBatteryTracker_v1';
+let data=JSON.parse(localStorage.getItem(KEY)||'[]');
+
+function save(){localStorage.setItem(KEY,JSON.stringify(data));}
+function today(){return new Date().toISOString().slice(0,10)}
+function formatDate(s){if(!s)return '-';const [y,m,d]=s.split('-');return `${d}-${m}-${y}`}
+function monthsSince(s){
+  const start=new Date(s+'T00:00:00'), now=new Date();
+  let m=(now.getFullYear()-start.getFullYear())*12+(now.getMonth()-start.getMonth());
+  if(now.getDate()<start.getDate())m--;
+  return Math.max(0,m);
+}
+function status(m){
+  if(m>=24)return ['replace','🔴 Segera Ganti'];
+  if(m>=18)return ['attention','🟡 Perlu Perhatian'];
+  return ['normal','🟢 Normal'];
+}
+function render(){
+  const q=document.getElementById('search').value.toLowerCase(), f=document.getElementById('filter').value;
+  let counts={normal:0,attention:0,replace:0};
+  data.forEach(x=>counts[status(monthsSince(x.date))[0]]++);
+  document.getElementById('total').textContent=data.length;
+  document.getElementById('normal').textContent=counts.normal;
+  document.getElementById('attention').textContent=counts.attention;
+  document.getElementById('replace').textContent=counts.replace;
+  const rows=data.filter(x=>{
+    const [st]=status(monthsSince(x.date));
+    return (f==='all'||f===st) && [x.name,x.location,x.technician,x.notes].join(' ').toLowerCase().includes(q);
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('tbody').innerHTML=rows.length?rows.map((x,i)=>{
+    const age=monthsSince(x.date), [st,label]=status(age);
+    return `<tr><td>${i+1}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.location)}</td><td>${formatDate(x.date)}</td><td>${age} bulan</td><td>${esc(x.technician||'-')}</td><td><span class="badge ${st}">${label}</span></td><td><div class="actions"><button class="btn-edit" onclick="editData('${x.id}')">Edit</button><button class="btn-danger" onclick="deleteData('${x.id}')">Hapus</button></div></td></tr>`;
+  }).join(''):`<tr><td colspan="8" class="empty">Belum ada data UPS.</td></tr>`;
+}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function openModal(id=null){
+  document.getElementById('form').reset();document.getElementById('editId').value=id||'';
+  document.getElementById('modalTitle').textContent=id?'Edit Data UPS':'Tambah Data UPS';
+  if(id){const x=data.find(a=>a.id===id);if(x){document.getElementById('name').value=x.name;
+    document.getElementById('location').value=x.location;
+    document.getElementById('date').value=x.date;
+    document.getElementById('technician').value=x.technician||'';
+    document.getElementById('notes').value=x.notes||''}}
+  else date.value=today();
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function saveData(e){
+  e.preventDefault();
+  const id=document.getElementById('editId').value;
+  const obj={
+    id:id||Date.now().toString(),
+    name:document.getElementById('name').value.trim(),
+    location:document.getElementById('location').value.trim(),
+    date:document.getElementById('date').value,
+    technician:document.getElementById('technician').value.trim(),
+    notes:document.getElementById('notes').value.trim()
+  };
+  if(id){const i=data.findIndex(x=>x.id===id);data[i]=obj}else data.push(obj);
+  save();render();closeModal();
+}
+function editData(id){openModal(id)}
+function deleteData(id){
+  const x=data.find(a=>a.id===id);
+  if(x&&confirm(`Hapus data "${x.name}"?`)){data=data.filter(a=>a.id!==id);save();render()}
+}
+function download(content,name,type){
+  const blob=new Blob([content],{type}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);
+}
+function exportJSON(){download(JSON.stringify(data,null,2),'backup-ups-battery.json','application/json')}
+function csvCell(v){return `"${String(v??'').replace(/"/g,'""')}"`}
+function exportCSV(){
+  const head=['No','Nama UPS','Lokasi','Tanggal Ganti','Umur (bulan)','Teknisi','Status','Catatan'];
+  const rows=data.map((x,i)=>[i+1,x.name,x.location,x.date,monthsSince(x.date),x.technician,status(monthsSince(x.date))[1],x.notes]);
+  download([head,...rows].map(r=>r.map(csvCell).join(',')).join('\\r\\n'),'ups-battery-data.csv','text/csv;charset=utf-8')
+}
+function importJSON(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();reader.onload=()=>{
+    try{
+      const imported=JSON.parse(reader.result);
+      if(!Array.isArray(imported))throw new Error();
+      if(confirm('Import akan mengganti data saat ini. Lanjutkan?')){data=imported;save();render();alert('Data berhasil diimport.')}
+    }catch(err){alert('File JSON tidak valid.')}
+    e.target.value='';
+  };reader.readAsText(file);
+}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+render();
+</script>
+</body>
+</html>
