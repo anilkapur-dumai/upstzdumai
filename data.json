@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "id": "1789116332291",
+    "name": "cost control",
+    "location": "Accounting",
+    "date": "2026-09-01",
+    "technician": "Robby",
+    "notes": "Sudah ganti baterai"
+  }
+]
